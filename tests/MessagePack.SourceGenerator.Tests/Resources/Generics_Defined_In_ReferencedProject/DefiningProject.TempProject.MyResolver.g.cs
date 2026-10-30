@@ -29,11 +29,7 @@ partial class MyResolver : MsgPack::IFormatterResolver
 
 		static FormatterCache()
 		{
-			var f = MyResolverGetFormatterHelper.GetFormatter(typeof(T));
-			if (f != null)
-			{
-				Formatter = (MsgPack::Formatters.IMessagePackFormatter<T>)f;
-			}
+			Formatter = (MsgPack::Formatters.IMessagePackFormatter<T>)MyResolverGetFormatterHelper.GetOpenGenericFormatter(typeof(T));
 		}
 	}
 
@@ -44,7 +40,7 @@ partial class MyResolver : MsgPack::IFormatterResolver
 			{ typeof(global::TempProject.MyGenericObject<>), 0 },
 		};
 
-		internal static object GetFormatter(global::System.Type t)
+		internal static object GetOpenGenericFormatter(global::System.Type t)
 		{
 			if (t.IsGenericType && openTypeLookup.TryGetValue(t.GetGenericTypeDefinition(), out int openKey))
 			{

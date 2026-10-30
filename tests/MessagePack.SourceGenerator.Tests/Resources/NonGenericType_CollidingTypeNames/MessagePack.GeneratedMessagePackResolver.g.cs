@@ -29,38 +29,94 @@ partial class GeneratedMessagePackResolver : MsgPack::IFormatterResolver
 
 		static FormatterCache()
 		{
-			var f = GeneratedMessagePackResolverGetFormatterHelper.GetFormatter(typeof(T));
-			if (f != null)
-			{
-				Formatter = (MsgPack::Formatters.IMessagePackFormatter<T>)f;
-			}
+			// Closed types are found by a hash of their runtime name, so the formatter may belong to another type with
+			// the same name (from another assembly, say). That formatter is not an IMessagePackFormatter<T>.
+			Formatter = GeneratedMessagePackResolverGetFormatterHelper.GetClosedFormatter(typeof(T)) as MsgPack::Formatters.IMessagePackFormatter<T>;
 		}
 	}
 
 	private static class GeneratedMessagePackResolverGetFormatterHelper
 	{
-		private static readonly global::System.Collections.Generic.Dictionary<global::System.Type, int> closedTypeLookup = new global::System.Collections.Generic.Dictionary<global::System.Type, int>(3)
+		/// <summary>
+		/// Finds the formatter by a hash of the requested type's runtime name, without a typeof() of each registered type:
+		/// a table of typeof() values would make the runtime create every registered type up front (IL2CPP builds an
+		/// Il2CppClass for each, JIT-based runtimes load each), and typeof() checks here would make a JIT load every
+		/// registered type when compiling this method.
+		/// The caller confirms the type, since another type can have the same runtime name.
+		/// </summary>
+		internal static object GetClosedFormatter(global::System.Type t)
 		{
-			{ typeof(global::MyMessagePackObject), 0 },
-			{ typeof(global::NS1.MyType), 1 },
-			{ typeof(global::NS2.MyType), 2 },
-		};
-
-		internal static object GetFormatter(global::System.Type t)
-		{
-			if (closedTypeLookup.TryGetValue(t, out int closedKey))
+			switch (GetTypeKeyHash(t))
 			{
-				switch (closedKey)
-				{
-					case 0: return new global::MessagePack.GeneratedMessagePackResolver.MyMessagePackObjectFormatter();
-					case 1: return new global::MessagePack.GeneratedMessagePackResolver.NS1.MyTypeFormatter();
-					case 2: return new global::MessagePack.GeneratedMessagePackResolver.NS2.MyTypeFormatter();
-					default: return null; // unreachable
-				};
+				case 0x59749315798B84E8UL: return GeneratedMessagePackResolverFormatterFactory.Create0();
+				case 0x750CF42392BAE000UL: return GeneratedMessagePackResolverFormatterFactory.Create2();
+				case 0x8FAE67BEDBBE567FUL: return GeneratedMessagePackResolverFormatterFactory.Create1();
 			}
 
 			return null;
 		}
+
+		/// <summary>
+		/// Hashes the namespace-qualified runtime name of a type with 64-bit FNV-1a,
+		/// matching what the source generator computed for each registered type.
+		/// </summary>
+		private static ulong GetTypeKeyHash(global::System.Type t)
+		{
+			var builder = new global::System.Text.StringBuilder();
+			AppendTypeKey(builder, t);
+			ulong hash = 14695981039346656037UL;
+			for (int i = 0; i < builder.Length; i++)
+			{
+				hash = (hash ^ builder[i]) * 1099511628211UL;
+			}
+
+			return hash;
+		}
+
+		private static void AppendTypeKey(global::System.Text.StringBuilder builder, global::System.Type t)
+		{
+			if (t.IsArray)
+			{
+				AppendTypeKey(builder, t.GetElementType());
+				builder.Append('[').Append(',', t.GetArrayRank() - 1).Append(']');
+			}
+			else if (t.IsGenericType)
+			{
+				builder.Append(t.GetGenericTypeDefinition().FullName).Append('[');
+				global::System.Type[] arguments = t.GetGenericArguments();
+				for (int i = 0; i < arguments.Length; i++)
+				{
+					if (i > 0)
+					{
+						builder.Append(',');
+					}
+
+					AppendTypeKey(builder, arguments[i]);
+				}
+
+				builder.Append(']');
+			}
+			else
+			{
+				builder.Append(t.FullName);
+			}
+		}
+	}
+
+	/// <summary>
+	/// Creates each registered formatter in its own method, so that requesting one formatter only makes the runtime
+	/// resolve that formatter's types. A single method that references every formatter forces all of them to load
+	/// at once: IL2CPP initializes all metadata a method uses on its first call, and JIT-based runtimes load every
+	/// type a method references when compiling it.
+	/// Methods that take the requested type are for types that share a key hash with another registered type, or that
+	/// have no key: they confirm the type with typeof() and return null for any other type.
+	/// This class has no static state, so calling into it never triggers class initialization.
+	/// </summary>
+	private static class GeneratedMessagePackResolverFormatterFactory
+	{
+		internal static object Create0() => new global::MessagePack.GeneratedMessagePackResolver.MyMessagePackObjectFormatter();
+		internal static object Create1() => new global::MessagePack.GeneratedMessagePackResolver.NS1.MyTypeFormatter();
+		internal static object Create2() => new global::MessagePack.GeneratedMessagePackResolver.NS2.MyTypeFormatter();
 	}
 }
 

@@ -43,47 +43,44 @@ namespace MessagePack.SourceGenerator.Transforms
             this.Write(this.ToStringHelper.ToStringWithCulture(ResolverName.Name));
             this.Write("();\r\n\r\n\tprivate ");
             this.Write(this.ToStringHelper.ToStringWithCulture(ResolverName.Name));
-            this.Write(@"()
-	{
-	}
-
-	public MsgPack::Formatters.IMessagePackFormatter<T> GetFormatter<T>()
-	{
-		return FormatterCache<T>.Formatter;
-	}
-
-	private static class FormatterCache<T>
-	{
-		internal static readonly MsgPack::Formatters.IMessagePackFormatter<T> Formatter;
-
-		static FormatterCache()
-		{
-			var f = ");
-            this.Write(this.ToStringHelper.ToStringWithCulture(ResolverName.Name));
-            this.Write("GetFormatterHelper.GetFormatter(typeof(T));\r\n\t\t\tif (f != null)\r\n\t\t\t{\r\n\t\t\t\tFormatt" +
-                    "er = (MsgPack::Formatters.IMessagePackFormatter<T>)f;\r\n\t\t\t}\r\n\t\t}\r\n\t}\r\n\r\n\tprivate" +
-                    " static class ");
-            this.Write(this.ToStringHelper.ToStringWithCulture(ResolverName.Name));
-            this.Write("GetFormatterHelper\r\n\t{\r\n");
+            this.Write("()\r\n\t{\r\n\t}\r\n\r\n\tpublic MsgPack::Formatters.IMessagePackFormatter<T> GetFormatter<T" +
+                    ">()\r\n\t{\r\n\t\treturn FormatterCache<T>.Formatter;\r\n\t}\r\n\r\n");
 
    var constructedRegistrations = ConstructedTypeRegistrations.ToArray();
-   if (constructedRegistrations.Length > 0) { 
-            this.Write("\t\tprivate static readonly global::System.Collections.Generic.Dictionary<global::S" +
-                    "ystem.Type, int> closedTypeLookup = new global::System.Collections.Generic.Dicti" +
-                    "onary<global::System.Type, int>(");
-            this.Write(this.ToStringHelper.ToStringWithCulture(constructedRegistrations.Length));
-            this.Write(")\r\n\t\t{\r\n");
- for(var i = 0; i < constructedRegistrations.Length; i++) { 
-            this.Write("\t\t\t{ typeof(");
-            this.Write(this.ToStringHelper.ToStringWithCulture(constructedRegistrations[i].DataType.GetQualifiedName(genericStyle: GenericParameterStyle.Arguments)));
-            this.Write("), ");
-            this.Write(this.ToStringHelper.ToStringWithCulture(i));
-            this.Write(" },\r\n");
- } 
-            this.Write("\t\t};\r\n");
- }
+   var keyedRegistrations = GroupByRuntimeTypeKeyHash(constructedRegistrations, out var unkeyedRegistrations);
+   var checkedRegistrations = new HashSet<int>(keyedRegistrations.Where(g => g.Count() > 1).SelectMany(g => g).Concat(unkeyedRegistrations));
    var openGenericRegistrations = OpenGenericRegistrations.ToArray();
-   if (openGenericRegistrations.Length > 0) { 
+
+            this.Write("\tprivate static class FormatterCache<T>\r\n\t{\r\n\t\tinternal static readonly MsgPack::" +
+                    "Formatters.IMessagePackFormatter<T> Formatter;\r\n\r\n\t\tstatic FormatterCache()\r\n\t\t{" +
+                    "\r\n");
+ if (constructedRegistrations.Length > 0) { 
+            this.Write("\t\t\t// Closed types are found by a hash of their runtime name, so the formatter ma" +
+                    "y belong to another type with\r\n\t\t\t// the same name (from another assembly, say)." +
+                    " That formatter is not an IMessagePackFormatter<T>.\r\n");
+     if (openGenericRegistrations.Length > 0) { 
+            this.Write("\t\t\tvar formatter = ");
+            this.Write(this.ToStringHelper.ToStringWithCulture(ResolverName.Name));
+            this.Write("GetFormatterHelper.GetClosedFormatter(typeof(T)) as MsgPack::Formatters.IMessageP" +
+                    "ackFormatter<T>;\r\n\t\t\tFormatter = formatter ?? (MsgPack::Formatters.IMessagePackF" +
+                    "ormatter<T>)");
+            this.Write(this.ToStringHelper.ToStringWithCulture(ResolverName.Name));
+            this.Write("GetFormatterHelper.GetOpenGenericFormatter(typeof(T));\r\n");
+     } else { 
+            this.Write("\t\t\tFormatter = ");
+            this.Write(this.ToStringHelper.ToStringWithCulture(ResolverName.Name));
+            this.Write("GetFormatterHelper.GetClosedFormatter(typeof(T)) as MsgPack::Formatters.IMessageP" +
+                    "ackFormatter<T>;\r\n");
+     } 
+ } else if (openGenericRegistrations.Length > 0) { 
+            this.Write("\t\t\tFormatter = (MsgPack::Formatters.IMessagePackFormatter<T>)");
+            this.Write(this.ToStringHelper.ToStringWithCulture(ResolverName.Name));
+            this.Write("GetFormatterHelper.GetOpenGenericFormatter(typeof(T));\r\n");
+ } 
+            this.Write("\t\t}\r\n\t}\r\n\r\n\tprivate static class ");
+            this.Write(this.ToStringHelper.ToStringWithCulture(ResolverName.Name));
+            this.Write("GetFormatterHelper\r\n\t{\r\n");
+ if (openGenericRegistrations.Length > 0) { 
             this.Write("\t\tprivate static readonly global::System.Collections.Generic.Dictionary<global::S" +
                     "ystem.Type, int> openTypeLookup = new global::System.Collections.Generic.Diction" +
                     "ary<global::System.Type, int>(");
@@ -96,25 +93,9 @@ namespace MessagePack.SourceGenerator.Transforms
             this.Write(this.ToStringHelper.ToStringWithCulture(i));
             this.Write(" },\r\n");
  } 
-            this.Write("\t\t};\r\n");
- } 
-            this.Write("\r\n\t\tinternal static object GetFormatter(global::System.Type t)\r\n\t\t{\r\n");
- if (constructedRegistrations.Length > 0) { 
-            this.Write("\t\t\tif (closedTypeLookup.TryGetValue(t, out int closedKey))\r\n\t\t\t{\r\n\t\t\t\tswitch (clo" +
-                    "sedKey)\r\n\t\t\t\t{\r\n");
- for(var i = 0; i < constructedRegistrations.Length; i++) { var x = constructedRegistrations[i]; 
-            this.Write("\t\t\t\t\tcase ");
-            this.Write(this.ToStringHelper.ToStringWithCulture(i));
-            this.Write(": return ");
-            this.Write(this.ToStringHelper.ToStringWithCulture(x.GetFormatterInstanceForResolver()));
-            this.Write(";\r\n");
- } 
-            this.Write("\t\t\t\t\tdefault: return null; // unreachable\r\n\t\t\t\t};\r\n\t\t\t}\r\n");
- }
-
-   if (openGenericRegistrations.Length > 0) { 
-            this.Write("\t\t\tif (t.IsGenericType && openTypeLookup.TryGetValue(t.GetGenericTypeDefinition()" +
-                    ", out int openKey))\r\n\t\t\t{\r\n\t\t\t\tswitch (openKey)\r\n\t\t\t\t{\r\n");
+            this.Write("\t\t};\r\n\r\n\t\tinternal static object GetOpenGenericFormatter(global::System.Type t)\r\n" +
+                    "\t\t{\r\n\t\t\tif (t.IsGenericType && openTypeLookup.TryGetValue(t.GetGenericTypeDefini" +
+                    "tion(), out int openKey))\r\n\t\t\t{\r\n\t\t\t\tswitch (openKey)\r\n\t\t\t\t{\r\n");
      for(var i = 0; i < openGenericRegistrations.Length; i++) { var x = openGenericRegistrations[i]; 
             this.Write("\t\t\t\t\tcase ");
             this.Write(this.ToStringHelper.ToStringWithCulture(i));
@@ -122,9 +103,130 @@ namespace MessagePack.SourceGenerator.Transforms
             this.Write(this.ToStringHelper.ToStringWithCulture(x.GetFormatterNameForResolver(GenericParameterStyle.TypeDefinition)));
             this.Write(").MakeGenericType(t.GenericTypeArguments));\r\n");
      } 
-            this.Write("\t\t\t\t\tdefault: return null; // unreachable\r\n\t\t\t\t};\r\n\t\t\t}\r\n");
+            this.Write("\t\t\t\t\tdefault: return null; // unreachable\r\n\t\t\t\t};\r\n\t\t\t}\r\n\r\n\t\t\treturn null;\r\n\t\t}\r\n" +
+                    "");
+ }
+   if (constructedRegistrations.Length > 0) { 
+     if (openGenericRegistrations.Length > 0) { 
+            this.Write("\r\n");
+     } 
+            this.Write(@"		/// <summary>
+		/// Finds the formatter by a hash of the requested type's runtime name, without a typeof() of each registered type:
+		/// a table of typeof() values would make the runtime create every registered type up front (IL2CPP builds an
+		/// Il2CppClass for each, JIT-based runtimes load each), and typeof() checks here would make a JIT load every
+		/// registered type when compiling this method.
+		/// The caller confirms the type, since another type can have the same runtime name.
+		/// </summary>
+		internal static object GetClosedFormatter(global::System.Type t)
+		{
+");
+ if (keyedRegistrations.Count > 0) { 
+            this.Write("\t\t\tswitch (GetTypeKeyHash(t))\r\n\t\t\t{\r\n");
+ foreach (var group in keyedRegistrations) { 
+            this.Write("\t\t\t\tcase 0x");
+            this.Write(this.ToStringHelper.ToStringWithCulture(group.Key.ToString("X16")));
+            this.Write("UL: return ");
+            this.Write(this.ToStringHelper.ToStringWithCulture(group.Count() == 1 ? $"{ResolverName.Name}FormatterFactory.Create{group.First()}()" : string.Join(" ?? ", group.Select(i => $"{ResolverName.Name}FormatterFactory.Create{i}(t)"))));
+            this.Write(";\r\n");
  } 
-            this.Write("\r\n\t\t\treturn null;\r\n\t\t}\r\n\t}\r\n}\r\n\r\n");
+            this.Write("\t\t\t}\r\n\r\n");
+ }
+   foreach (var i in unkeyedRegistrations) { 
+            this.Write("\t\t\tif (");
+            this.Write(this.ToStringHelper.ToStringWithCulture(ResolverName.Name));
+            this.Write("FormatterFactory.Create");
+            this.Write(this.ToStringHelper.ToStringWithCulture(i));
+            this.Write("(t) is object formatter");
+            this.Write(this.ToStringHelper.ToStringWithCulture(i));
+            this.Write(")\r\n\t\t\t{\r\n\t\t\t\treturn formatter");
+            this.Write(this.ToStringHelper.ToStringWithCulture(i));
+            this.Write(";\r\n\t\t\t}\r\n\r\n");
+ } 
+            this.Write(@"			return null;
+		}
+
+		/// <summary>
+		/// Hashes the namespace-qualified runtime name of a type with 64-bit FNV-1a,
+		/// matching what the source generator computed for each registered type.
+		/// </summary>
+		private static ulong GetTypeKeyHash(global::System.Type t)
+		{
+			var builder = new global::System.Text.StringBuilder();
+			AppendTypeKey(builder, t);
+			ulong hash = 14695981039346656037UL;
+			for (int i = 0; i < builder.Length; i++)
+			{
+				hash = (hash ^ builder[i]) * 1099511628211UL;
+			}
+
+			return hash;
+		}
+
+		private static void AppendTypeKey(global::System.Text.StringBuilder builder, global::System.Type t)
+		{
+			if (t.IsArray)
+			{
+				AppendTypeKey(builder, t.GetElementType());
+				builder.Append('[').Append(',', t.GetArrayRank() - 1).Append(']');
+			}
+			else if (t.IsGenericType)
+			{
+				builder.Append(t.GetGenericTypeDefinition().FullName).Append('[');
+				global::System.Type[] arguments = t.GetGenericArguments();
+				for (int i = 0; i < arguments.Length; i++)
+				{
+					if (i > 0)
+					{
+						builder.Append(',');
+					}
+
+					AppendTypeKey(builder, arguments[i]);
+				}
+
+				builder.Append(']');
+			}
+			else
+			{
+				builder.Append(t.FullName);
+			}
+		}
+");
+ } 
+            this.Write("\t}\r\n");
+ if (constructedRegistrations.Length > 0) { 
+            this.Write(@"
+	/// <summary>
+	/// Creates each registered formatter in its own method, so that requesting one formatter only makes the runtime
+	/// resolve that formatter's types. A single method that references every formatter forces all of them to load
+	/// at once: IL2CPP initializes all metadata a method uses on its first call, and JIT-based runtimes load every
+	/// type a method references when compiling it.
+	/// Methods that take the requested type are for types that share a key hash with another registered type, or that
+	/// have no key: they confirm the type with typeof() and return null for any other type.
+	/// This class has no static state, so calling into it never triggers class initialization.
+	/// </summary>
+	private static class ");
+            this.Write(this.ToStringHelper.ToStringWithCulture(ResolverName.Name));
+            this.Write("FormatterFactory\r\n\t{\r\n");
+ for(var i = 0; i < constructedRegistrations.Length; i++) { var x = constructedRegistrations[i]; 
+     if (checkedRegistrations.Contains(i)) { 
+            this.Write("\t\tinternal static object Create");
+            this.Write(this.ToStringHelper.ToStringWithCulture(i));
+            this.Write("(global::System.Type t) => t == typeof(");
+            this.Write(this.ToStringHelper.ToStringWithCulture(x.DataType.GetQualifiedName(genericStyle: GenericParameterStyle.Arguments)));
+            this.Write(") ? ");
+            this.Write(this.ToStringHelper.ToStringWithCulture(x.GetFormatterInstanceForResolver()));
+            this.Write(" : null;\r\n");
+     } else { 
+            this.Write("\t\tinternal static object Create");
+            this.Write(this.ToStringHelper.ToStringWithCulture(i));
+            this.Write("() => ");
+            this.Write(this.ToStringHelper.ToStringWithCulture(x.GetFormatterInstanceForResolver()));
+            this.Write(";\r\n");
+     } 
+ } 
+            this.Write("\t}\r\n");
+ } 
+            this.Write("}\r\n\r\n");
  } 
             return this.GenerationEnvironment.ToString();
         }

@@ -29,31 +29,15 @@ partial class GeneratedMessagePackResolver : MsgPack::IFormatterResolver
 
 		static FormatterCache()
 		{
-			var f = GeneratedMessagePackResolverGetFormatterHelper.GetFormatter(typeof(T));
-			if (f != null)
-			{
-				Formatter = (MsgPack::Formatters.IMessagePackFormatter<T>)f;
-			}
+			// Closed types are found by a hash of their runtime name, so the formatter may belong to another type with
+			// the same name (from another assembly, say). That formatter is not an IMessagePackFormatter<T>.
+			var formatter = GeneratedMessagePackResolverGetFormatterHelper.GetClosedFormatter(typeof(T)) as MsgPack::Formatters.IMessagePackFormatter<T>;
+			Formatter = formatter ?? (MsgPack::Formatters.IMessagePackFormatter<T>)GeneratedMessagePackResolverGetFormatterHelper.GetOpenGenericFormatter(typeof(T));
 		}
 	}
 
 	private static class GeneratedMessagePackResolverGetFormatterHelper
 	{
-		private static readonly global::System.Collections.Generic.Dictionary<global::System.Type, int> closedTypeLookup = new global::System.Collections.Generic.Dictionary<global::System.Type, int>(12)
-		{
-			{ typeof(global::System.Collections.Generic.List<int[]>), 0 },
-			{ typeof(global::System.Collections.Generic.List<global::System.Collections.Generic.IEnumerable<global::System.Guid>>), 1 },
-			{ typeof(global::System.Collections.Generic.IEnumerable<global::System.Guid>), 2 },
-			{ typeof(global::TempProject.MyGenericObject<int[]>), 3 },
-			{ typeof(global::TempProject.MyGenericObject<string>), 4 },
-			{ typeof(global::TempProject.MyGenericObject<global::System.Collections.Generic.IEnumerable<global::System.Guid>>), 5 },
-			{ typeof(global::TempProject.MyInnerGenericObject<int[]>), 6 },
-			{ typeof(global::TempProject.MyInnerGenericObject<string>), 7 },
-			{ typeof(global::TempProject.MyInnerGenericObject<global::System.Collections.Generic.IEnumerable<global::System.Guid>>), 8 },
-			{ typeof(global::TempProject.Wrapper<int[]>), 9 },
-			{ typeof(global::TempProject.Wrapper<string>), 10 },
-			{ typeof(global::TempProject.Wrapper<global::System.Collections.Generic.IEnumerable<global::System.Guid>>), 11 },
-		};
 		private static readonly global::System.Collections.Generic.Dictionary<global::System.Type, int> openTypeLookup = new global::System.Collections.Generic.Dictionary<global::System.Type, int>(3)
 		{
 			{ typeof(global::TempProject.MyGenericObject<>), 0 },
@@ -61,27 +45,8 @@ partial class GeneratedMessagePackResolver : MsgPack::IFormatterResolver
 			{ typeof(global::TempProject.Wrapper<>), 2 },
 		};
 
-		internal static object GetFormatter(global::System.Type t)
+		internal static object GetOpenGenericFormatter(global::System.Type t)
 		{
-			if (closedTypeLookup.TryGetValue(t, out int closedKey))
-			{
-				switch (closedKey)
-				{
-					case 0: return new MsgPack::Formatters.ListFormatter<int[]>();
-					case 1: return new MsgPack::Formatters.ListFormatter<global::System.Collections.Generic.IEnumerable<global::System.Guid>>();
-					case 2: return new MsgPack::Formatters.InterfaceEnumerableFormatter<global::System.Guid>();
-					case 3: return new global::MessagePack.GeneratedMessagePackResolver.TempProject.MyGenericObjectFormatter<int[]>();
-					case 4: return new global::MessagePack.GeneratedMessagePackResolver.TempProject.MyGenericObjectFormatter<string>();
-					case 5: return new global::MessagePack.GeneratedMessagePackResolver.TempProject.MyGenericObjectFormatter<global::System.Collections.Generic.IEnumerable<global::System.Guid>>();
-					case 6: return new global::MessagePack.GeneratedMessagePackResolver.TempProject.MyInnerGenericObjectFormatter<int[]>();
-					case 7: return new global::MessagePack.GeneratedMessagePackResolver.TempProject.MyInnerGenericObjectFormatter<string>();
-					case 8: return new global::MessagePack.GeneratedMessagePackResolver.TempProject.MyInnerGenericObjectFormatter<global::System.Collections.Generic.IEnumerable<global::System.Guid>>();
-					case 9: return new global::MessagePack.GeneratedMessagePackResolver.TempProject.WrapperFormatter<int[]>();
-					case 10: return new global::MessagePack.GeneratedMessagePackResolver.TempProject.WrapperFormatter<string>();
-					case 11: return new global::MessagePack.GeneratedMessagePackResolver.TempProject.WrapperFormatter<global::System.Collections.Generic.IEnumerable<global::System.Guid>>();
-					default: return null; // unreachable
-				};
-			}
 			if (t.IsGenericType && openTypeLookup.TryGetValue(t.GetGenericTypeDefinition(), out int openKey))
 			{
 				switch (openKey)
@@ -95,6 +60,105 @@ partial class GeneratedMessagePackResolver : MsgPack::IFormatterResolver
 
 			return null;
 		}
+
+		/// <summary>
+		/// Finds the formatter by a hash of the requested type's runtime name, without a typeof() of each registered type:
+		/// a table of typeof() values would make the runtime create every registered type up front (IL2CPP builds an
+		/// Il2CppClass for each, JIT-based runtimes load each), and typeof() checks here would make a JIT load every
+		/// registered type when compiling this method.
+		/// The caller confirms the type, since another type can have the same runtime name.
+		/// </summary>
+		internal static object GetClosedFormatter(global::System.Type t)
+		{
+			switch (GetTypeKeyHash(t))
+			{
+				case 0x38E7FE429BB6A1E4UL: return GeneratedMessagePackResolverFormatterFactory.Create3();
+				case 0x4162411C2E47BC1FUL: return GeneratedMessagePackResolverFormatterFactory.Create9();
+				case 0x44FF4DEB72C0C2CCUL: return GeneratedMessagePackResolverFormatterFactory.Create10();
+				case 0x6476D35A46D20183UL: return GeneratedMessagePackResolverFormatterFactory.Create11();
+				case 0x95E281116E7BEA1CUL: return GeneratedMessagePackResolverFormatterFactory.Create0();
+				case 0xA894A602925AC66EUL: return GeneratedMessagePackResolverFormatterFactory.Create1();
+				case 0xAA57D3A9415AD0E6UL: return GeneratedMessagePackResolverFormatterFactory.Create5();
+				case 0xB4D0640D743F5DDAUL: return GeneratedMessagePackResolverFormatterFactory.Create2();
+				case 0xDB3CB45F8F8ACA1DUL: return GeneratedMessagePackResolverFormatterFactory.Create4();
+				case 0xE40E1C68F6973386UL: return GeneratedMessagePackResolverFormatterFactory.Create8();
+				case 0xE62ABFCCDA2C0C44UL: return GeneratedMessagePackResolverFormatterFactory.Create6();
+				case 0xEEBB6CD95D4E27FDUL: return GeneratedMessagePackResolverFormatterFactory.Create7();
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Hashes the namespace-qualified runtime name of a type with 64-bit FNV-1a,
+		/// matching what the source generator computed for each registered type.
+		/// </summary>
+		private static ulong GetTypeKeyHash(global::System.Type t)
+		{
+			var builder = new global::System.Text.StringBuilder();
+			AppendTypeKey(builder, t);
+			ulong hash = 14695981039346656037UL;
+			for (int i = 0; i < builder.Length; i++)
+			{
+				hash = (hash ^ builder[i]) * 1099511628211UL;
+			}
+
+			return hash;
+		}
+
+		private static void AppendTypeKey(global::System.Text.StringBuilder builder, global::System.Type t)
+		{
+			if (t.IsArray)
+			{
+				AppendTypeKey(builder, t.GetElementType());
+				builder.Append('[').Append(',', t.GetArrayRank() - 1).Append(']');
+			}
+			else if (t.IsGenericType)
+			{
+				builder.Append(t.GetGenericTypeDefinition().FullName).Append('[');
+				global::System.Type[] arguments = t.GetGenericArguments();
+				for (int i = 0; i < arguments.Length; i++)
+				{
+					if (i > 0)
+					{
+						builder.Append(',');
+					}
+
+					AppendTypeKey(builder, arguments[i]);
+				}
+
+				builder.Append(']');
+			}
+			else
+			{
+				builder.Append(t.FullName);
+			}
+		}
+	}
+
+	/// <summary>
+	/// Creates each registered formatter in its own method, so that requesting one formatter only makes the runtime
+	/// resolve that formatter's types. A single method that references every formatter forces all of them to load
+	/// at once: IL2CPP initializes all metadata a method uses on its first call, and JIT-based runtimes load every
+	/// type a method references when compiling it.
+	/// Methods that take the requested type are for types that share a key hash with another registered type, or that
+	/// have no key: they confirm the type with typeof() and return null for any other type.
+	/// This class has no static state, so calling into it never triggers class initialization.
+	/// </summary>
+	private static class GeneratedMessagePackResolverFormatterFactory
+	{
+		internal static object Create0() => new MsgPack::Formatters.ListFormatter<int[]>();
+		internal static object Create1() => new MsgPack::Formatters.ListFormatter<global::System.Collections.Generic.IEnumerable<global::System.Guid>>();
+		internal static object Create2() => new MsgPack::Formatters.InterfaceEnumerableFormatter<global::System.Guid>();
+		internal static object Create3() => new global::MessagePack.GeneratedMessagePackResolver.TempProject.MyGenericObjectFormatter<int[]>();
+		internal static object Create4() => new global::MessagePack.GeneratedMessagePackResolver.TempProject.MyGenericObjectFormatter<string>();
+		internal static object Create5() => new global::MessagePack.GeneratedMessagePackResolver.TempProject.MyGenericObjectFormatter<global::System.Collections.Generic.IEnumerable<global::System.Guid>>();
+		internal static object Create6() => new global::MessagePack.GeneratedMessagePackResolver.TempProject.MyInnerGenericObjectFormatter<int[]>();
+		internal static object Create7() => new global::MessagePack.GeneratedMessagePackResolver.TempProject.MyInnerGenericObjectFormatter<string>();
+		internal static object Create8() => new global::MessagePack.GeneratedMessagePackResolver.TempProject.MyInnerGenericObjectFormatter<global::System.Collections.Generic.IEnumerable<global::System.Guid>>();
+		internal static object Create9() => new global::MessagePack.GeneratedMessagePackResolver.TempProject.WrapperFormatter<int[]>();
+		internal static object Create10() => new global::MessagePack.GeneratedMessagePackResolver.TempProject.WrapperFormatter<string>();
+		internal static object Create11() => new global::MessagePack.GeneratedMessagePackResolver.TempProject.WrapperFormatter<global::System.Collections.Generic.IEnumerable<global::System.Guid>>();
 	}
 }
 

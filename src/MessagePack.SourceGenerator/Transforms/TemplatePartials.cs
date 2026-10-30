@@ -62,6 +62,32 @@ public partial class ResolverTemplate
     public IEnumerable<ResolverRegisterInfo> ConstructedTypeRegistrations => this.AllRegisterRegistrations.Where(r => !r.IsUnboundGenericType);
 
     public string FileName => $"{this.ResolverName.GetQualifiedName(Qualifiers.Namespace, GenericParameterStyle.ArityOnly)}.g.cs";
+
+    /// <summary>
+    /// Groups registrations, by their index, under the hash of the runtime key of their data type (see <see cref="RuntimeTypeKey"/>).
+    /// More than one index in a group means a hash collision, which the generated code resolves by comparing types.
+    /// </summary>
+    /// <param name="registrations">The closed registrations.</param>
+    /// <param name="unkeyed">Receives the indexes of registrations whose runtime key cannot be predicted.</param>
+    private static IReadOnlyList<IGrouping<ulong, int>> GroupByRuntimeTypeKeyHash(IReadOnlyList<ResolverRegisterInfo> registrations, out IReadOnlyList<int> unkeyed)
+    {
+        List<(ulong Hash, int Index)> keyed = new();
+        List<int> unkeyedList = new();
+        for (int i = 0; i < registrations.Count; i++)
+        {
+            if (RuntimeTypeKey.TryGetKey(registrations[i].DataType, out string key))
+            {
+                keyed.Add((RuntimeTypeKey.Hash(key), i));
+            }
+            else
+            {
+                unkeyedList.Add(i);
+            }
+        }
+
+        unkeyed = unkeyedList;
+        return keyed.GroupBy(k => k.Hash, k => k.Index).OrderBy(g => g.Key).ToList();
+    }
 }
 
 public partial class EnumTemplate : IFormatterTemplate
