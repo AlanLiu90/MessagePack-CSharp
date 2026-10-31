@@ -121,15 +121,8 @@ namespace MessagePack.SourceGenerator.Transforms
 		{
 ");
  if (keyedRegistrations.Count > 0) { 
-            this.Write("\t\t\tswitch (GetTypeKeyHash(t))\r\n\t\t\t{\r\n");
- foreach (var group in keyedRegistrations) { 
-            this.Write("\t\t\t\tcase 0x");
-            this.Write(this.ToStringHelper.ToStringWithCulture(group.Key.ToString("X16")));
-            this.Write("UL: return ");
-            this.Write(this.ToStringHelper.ToStringWithCulture(group.Count() == 1 ? $"{ResolverName.Name}FormatterFactory.Create{group.First()}()" : string.Join(" ?? ", group.Select(i => $"{ResolverName.Name}FormatterFactory.Create{i}(t)"))));
-            this.Write(";\r\n");
- } 
-            this.Write("\t\t\t}\r\n\r\n");
+            this.Write("\t\t\tif (GetKeyedFormatter(GetTypeKeyHash(t), t) is object keyedFormatter)\r\n\t\t\t{\r\n\t" +
+                    "\t\t\treturn keyedFormatter;\r\n\t\t\t}\r\n\r\n");
  }
    foreach (var i in unkeyedRegistrations) { 
             this.Write("\t\t\tif (");
@@ -142,9 +135,28 @@ namespace MessagePack.SourceGenerator.Transforms
             this.Write(this.ToStringHelper.ToStringWithCulture(i));
             this.Write(";\r\n\t\t\t}\r\n\r\n");
  } 
-            this.Write(@"			return null;
-		}
-
+            this.Write("\t\t\treturn null;\r\n\t\t}\r\n");
+ if (keyedRegistrations.Count > 0) { 
+            this.Write(@"
+		/// <summary>
+		/// The switch is separate from the hash computation so that this method needs no stack frame:
+		/// each case can tail-call its factory without restoring registers first, which keeps native code smaller.
+		/// </summary>
+		private static object GetKeyedFormatter(ulong hash, global::System.Type t)
+		{
+			switch (hash)
+			{
+");
+ foreach (var group in keyedRegistrations) { 
+            this.Write("\t\t\t\tcase 0x");
+            this.Write(this.ToStringHelper.ToStringWithCulture(group.Key.ToString("X16")));
+            this.Write("UL: return ");
+            this.Write(this.ToStringHelper.ToStringWithCulture(group.Count() == 1 ? $"{ResolverName.Name}FormatterFactory.Create{group.First()}()" : string.Join(" ?? ", group.Select(i => $"{ResolverName.Name}FormatterFactory.Create{i}(t)"))));
+            this.Write(";\r\n");
+ } 
+            this.Write("\t\t\t}\r\n\r\n\t\t\treturn null;\r\n\t\t}\r\n");
+ } 
+            this.Write(@"
 		/// <summary>
 		/// Hashes the namespace-qualified runtime name of a type with 64-bit FNV-1a,
 		/// matching what the source generator computed for each registered type.

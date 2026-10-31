@@ -92,11 +92,9 @@ partial class <#= ResolverName.Name #> : MsgPack::IFormatterResolver
 		internal static object GetClosedFormatter(global::System.Type t)
 		{
 <# if (keyedRegistrations.Count > 0) { #>
-			switch (GetTypeKeyHash(t))
+			if (GetKeyedFormatter(GetTypeKeyHash(t), t) is object keyedFormatter)
 			{
-<# foreach (var group in keyedRegistrations) { #>
-				case 0x<#= group.Key.ToString("X16") #>UL: return <#= group.Count() == 1 ? $"{ResolverName.Name}FormatterFactory.Create{group.First()}()" : string.Join(" ?? ", group.Select(i => $"{ResolverName.Name}FormatterFactory.Create{i}(t)")) #>;
-<# } #>
+				return keyedFormatter;
 			}
 
 <# }
@@ -109,6 +107,24 @@ partial class <#= ResolverName.Name #> : MsgPack::IFormatterResolver
 <# } #>
 			return null;
 		}
+<# if (keyedRegistrations.Count > 0) { #>
+
+		/// <summary>
+		/// The switch is separate from the hash computation so that this method needs no stack frame:
+		/// each case can tail-call its factory without restoring registers first, which keeps native code smaller.
+		/// </summary>
+		private static object GetKeyedFormatter(ulong hash, global::System.Type t)
+		{
+			switch (hash)
+			{
+<# foreach (var group in keyedRegistrations) { #>
+				case 0x<#= group.Key.ToString("X16") #>UL: return <#= group.Count() == 1 ? $"{ResolverName.Name}FormatterFactory.Create{group.First()}()" : string.Join(" ?? ", group.Select(i => $"{ResolverName.Name}FormatterFactory.Create{i}(t)")) #>;
+<# } #>
+			}
+
+			return null;
+		}
+<# } #>
 
 		/// <summary>
 		/// Hashes the namespace-qualified runtime name of a type with 64-bit FNV-1a,

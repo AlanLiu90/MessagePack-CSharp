@@ -46,7 +46,21 @@ partial class GeneratedMessagePackResolver : MsgPack::IFormatterResolver
 		/// </summary>
 		internal static object GetClosedFormatter(global::System.Type t)
 		{
-			switch (GetTypeKeyHash(t))
+			if (GetKeyedFormatter(GetTypeKeyHash(t), t) is object keyedFormatter)
+			{
+				return keyedFormatter;
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// The switch is separate from the hash computation so that this method needs no stack frame:
+		/// each case can tail-call its factory without restoring registers first, which keeps native code smaller.
+		/// </summary>
+		private static object GetKeyedFormatter(ulong hash, global::System.Type t)
+		{
+			switch (hash)
 			{
 				case 0x46F23A91A17C9F3EUL: return GeneratedMessagePackResolverFormatterFactory.Create1();
 				case 0xFD36039B8C03556EUL: return GeneratedMessagePackResolverFormatterFactory.Create0();
