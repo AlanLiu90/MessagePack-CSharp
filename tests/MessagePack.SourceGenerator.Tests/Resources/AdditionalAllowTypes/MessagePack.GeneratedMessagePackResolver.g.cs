@@ -65,7 +65,7 @@ partial class GeneratedMessagePackResolver : MsgPack::IFormatterResolver
 			ulong hash = 14695981039346656037UL;
 			for (int i = 0; i < builder.Length; i++)
 			{
-				hash = (hash ^ builder[i]) * 1099511628211UL;
+				hash = unchecked((hash ^ builder[i]) * 1099511628211UL);
 			}
 
 			return hash;
