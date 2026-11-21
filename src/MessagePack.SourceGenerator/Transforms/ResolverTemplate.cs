@@ -136,26 +136,58 @@ namespace MessagePack.SourceGenerator.Transforms
             this.Write(";\r\n\t\t\t}\r\n\r\n");
  } 
             this.Write("\t\t\treturn null;\r\n\t\t}\r\n");
- if (keyedRegistrations.Count > 0) { 
+ if (keyedRegistrations.Count > 0) {
+       var keyHashBuckets = SplitByKeyHash(keyedRegistrations);
+       if (keyHashBuckets.Count > 1) { 
             this.Write(@"
 		/// <summary>
+		/// Picks the method that switches over the hash. The hashes are spread over several methods because a JIT
+		/// compiles a whole method the first time it runs, and one switch over every registered type is slow to compile
+		/// (tens of milliseconds for a few thousand types on Mono, whose JIT takes quadratic time on a large sparse switch).
+		/// This method is separate from the hash computation so that it needs no stack frame:
+		/// each case can tail-call without restoring registers first, which keeps native code smaller.
+		/// </summary>
+		private static object GetKeyedFormatter(ulong hash, global::System.Type t)
+		{
+			switch (unchecked((int)(hash % ");
+            this.Write(this.ToStringHelper.ToStringWithCulture(keyHashBuckets.Count));
+            this.Write("UL)))\r\n\t\t\t{\r\n");
+         for (var b = 0; b < keyHashBuckets.Count; b++) { if (keyHashBuckets[b].Count > 0) { 
+            this.Write("\t\t\t\tcase ");
+            this.Write(this.ToStringHelper.ToStringWithCulture(b));
+            this.Write(": return GetKeyedFormatter");
+            this.Write(this.ToStringHelper.ToStringWithCulture(b));
+            this.Write("(hash, t);\r\n");
+         } } 
+            this.Write("\t\t\t}\r\n\r\n\t\t\treturn null;\r\n\t\t}\r\n");
+     }
+       for (var b = 0; b < keyHashBuckets.Count; b++) { if (keyHashBuckets[b].Count > 0) { 
+            this.Write("\r\n");
+         if (keyHashBuckets.Count == 1) { 
+            this.Write(@"		/// <summary>
 		/// The switch is separate from the hash computation so that this method needs no stack frame:
 		/// each case can tail-call its factory without restoring registers first, which keeps native code smaller.
 		/// </summary>
 		private static object GetKeyedFormatter(ulong hash, global::System.Type t)
-		{
-			switch (hash)
-			{
 ");
- foreach (var group in keyedRegistrations) { 
+         } else { 
+            this.Write("\t\t[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.Comp" +
+                    "ilerServices.MethodImplOptions.NoInlining)]\r\n\t\tprivate static object GetKeyedFor" +
+                    "matter");
+            this.Write(this.ToStringHelper.ToStringWithCulture(b));
+            this.Write("(ulong hash, global::System.Type t)\r\n");
+         } 
+            this.Write("\t\t{\r\n\t\t\tswitch (hash)\r\n\t\t\t{\r\n");
+         foreach (var group in keyHashBuckets[b]) { 
             this.Write("\t\t\t\tcase 0x");
             this.Write(this.ToStringHelper.ToStringWithCulture(group.Key.ToString("X16")));
             this.Write("UL: return ");
             this.Write(this.ToStringHelper.ToStringWithCulture(group.Count() == 1 ? $"{ResolverName.Name}FormatterFactory.Create{group.First()}()" : string.Join(" ?? ", group.Select(i => $"{ResolverName.Name}FormatterFactory.Create{i}(t)"))));
             this.Write(";\r\n");
- } 
+         } 
             this.Write("\t\t\t}\r\n\r\n\t\t\treturn null;\r\n\t\t}\r\n");
- } 
+     } }
+   } 
             this.Write(@"
 		/// <summary>
 		/// Hashes the namespace-qualified runtime name of a type with 64-bit FNV-1a,
@@ -214,12 +246,16 @@ namespace MessagePack.SourceGenerator.Transforms
 	/// type a method references when compiling it.
 	/// Methods that take the requested type are for types that share a key hash with another registered type, or that
 	/// have no key: they confirm the type with typeof() and return null for any other type.
+	/// The methods must not be inlined: a JIT or AOT compiler that inlined them into the method that picks one
+	/// would again load every formatter that method can create.
 	/// This class has no static state, so calling into it never triggers class initialization.
 	/// </summary>
 	private static class ");
             this.Write(this.ToStringHelper.ToStringWithCulture(ResolverName.Name));
             this.Write("FormatterFactory\r\n\t{\r\n");
  for(var i = 0; i < constructedRegistrations.Length; i++) { var x = constructedRegistrations[i]; 
+            this.Write("\t\t[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.Comp" +
+                    "ilerServices.MethodImplOptions.NoInlining)]\r\n");
      if (checkedRegistrations.Contains(i)) { 
             this.Write("\t\tinternal static object Create");
             this.Write(this.ToStringHelper.ToStringWithCulture(i));
@@ -234,6 +270,9 @@ namespace MessagePack.SourceGenerator.Transforms
             this.Write("() => ");
             this.Write(this.ToStringHelper.ToStringWithCulture(x.GetFormatterInstanceForResolver()));
             this.Write(";\r\n");
+     } 
+     if (i < constructedRegistrations.Length - 1) { 
+            this.Write("\r\n");
      } 
  } 
             this.Write("\t}\r\n");

@@ -61,6 +61,11 @@ public partial class ResolverTemplate
 
     public IEnumerable<ResolverRegisterInfo> ConstructedTypeRegistrations => this.AllRegisterRegistrations.Where(r => !r.IsUnboundGenericType);
 
+    /// <summary>
+    /// The most key hashes, on average, that one generated method switches over. See <see cref="SplitByKeyHash"/>.
+    /// </summary>
+    private const int MaxAverageKeyHashesPerMethod = 32;
+
     public string FileName => $"{this.ResolverName.GetQualifiedName(Qualifiers.Namespace, GenericParameterStyle.ArityOnly)}.g.cs";
 
     /// <summary>
@@ -87,6 +92,34 @@ public partial class ResolverTemplate
 
         unkeyed = unkeyedList;
         return keyed.GroupBy(k => k.Hash, k => k.Index).OrderBy(g => g.Key).ToList();
+    }
+
+    /// <summary>
+    /// Splits the key hashes into buckets by <c>hash % count</c>, each of which gets a generated method that switches over its hashes.
+    /// </summary>
+    /// <param name="keyedRegistrations">The result of <see cref="GroupByRuntimeTypeKeyHash"/>.</param>
+    /// <returns>The buckets, by index. Some may be empty. A single bucket means the hashes need no splitting.</returns>
+    /// <remarks>
+    /// A JIT compiles a whole method the first time it runs, so one switch over every key hash makes the first lookup
+    /// pay for all of them. Mono's JIT also takes quadratic time over the large sparse switch that the C# compiler
+    /// turns into a binary search, because each of its many branch-only blocks restarts a pass over the method.
+    /// With one method per bucket, a lookup compiles a few dozen cases instead.
+    /// </remarks>
+    private static IReadOnlyList<IReadOnlyList<IGrouping<ulong, int>>> SplitByKeyHash(IReadOnlyList<IGrouping<ulong, int>> keyedRegistrations)
+    {
+        int bucketCount = Math.Max(1, (keyedRegistrations.Count + MaxAverageKeyHashesPerMethod - 1) / MaxAverageKeyHashesPerMethod);
+        List<IGrouping<ulong, int>>[] buckets = new List<IGrouping<ulong, int>>[bucketCount];
+        for (int i = 0; i < bucketCount; i++)
+        {
+            buckets[i] = new();
+        }
+
+        foreach (IGrouping<ulong, int> group in keyedRegistrations)
+        {
+            buckets[(int)(group.Key % (ulong)bucketCount)].Add(group);
+        }
+
+        return buckets;
     }
 }
 

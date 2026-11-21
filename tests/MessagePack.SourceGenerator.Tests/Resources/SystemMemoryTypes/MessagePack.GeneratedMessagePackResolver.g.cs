@@ -125,13 +125,22 @@ partial class GeneratedMessagePackResolver : MsgPack::IFormatterResolver
 	/// type a method references when compiling it.
 	/// Methods that take the requested type are for types that share a key hash with another registered type, or that
 	/// have no key: they confirm the type with typeof() and return null for any other type.
+	/// The methods must not be inlined: a JIT or AOT compiler that inlined them into the method that picks one
+	/// would again load every formatter that method can create.
 	/// This class has no static state, so calling into it never triggers class initialization.
 	/// </summary>
 	private static class GeneratedMessagePackResolverFormatterFactory
 	{
+		[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
 		internal static object Create0() => new MsgPack::Formatters.MemoryFormatter<int>();
+
+		[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
 		internal static object Create1() => new MsgPack::Formatters.ReadOnlyMemoryFormatter<int>();
+
+		[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
 		internal static object Create2() => new MsgPack::Formatters.ReadOnlySequenceFormatter<int>();
+
+		[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
 		internal static object Create3() => new global::MessagePack.GeneratedMessagePackResolver.AFormatter();
 	}
 }

@@ -107,24 +107,53 @@ partial class <#= ResolverName.Name #> : MsgPack::IFormatterResolver
 <# } #>
 			return null;
 		}
-<# if (keyedRegistrations.Count > 0) { #>
+<# if (keyedRegistrations.Count > 0) {
+       var keyHashBuckets = SplitByKeyHash(keyedRegistrations);
+       if (keyHashBuckets.Count > 1) { #>
 
+		/// <summary>
+		/// Picks the method that switches over the hash. The hashes are spread over several methods because a JIT
+		/// compiles a whole method the first time it runs, and one switch over every registered type is slow to compile
+		/// (tens of milliseconds for a few thousand types on Mono, whose JIT takes quadratic time on a large sparse switch).
+		/// This method is separate from the hash computation so that it needs no stack frame:
+		/// each case can tail-call without restoring registers first, which keeps native code smaller.
+		/// </summary>
+		private static object GetKeyedFormatter(ulong hash, global::System.Type t)
+		{
+			switch (unchecked((int)(hash % <#= keyHashBuckets.Count #>UL)))
+			{
+<#         for (var b = 0; b < keyHashBuckets.Count; b++) { if (keyHashBuckets[b].Count > 0) { #>
+				case <#= b #>: return GetKeyedFormatter<#= b #>(hash, t);
+<#         } } #>
+			}
+
+			return null;
+		}
+<#     }
+       for (var b = 0; b < keyHashBuckets.Count; b++) { if (keyHashBuckets[b].Count > 0) { #>
+
+<#         if (keyHashBuckets.Count == 1) { #>
 		/// <summary>
 		/// The switch is separate from the hash computation so that this method needs no stack frame:
 		/// each case can tail-call its factory without restoring registers first, which keeps native code smaller.
 		/// </summary>
 		private static object GetKeyedFormatter(ulong hash, global::System.Type t)
+<#         } else { #>
+		[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+		private static object GetKeyedFormatter<#= b #>(ulong hash, global::System.Type t)
+<#         } #>
 		{
 			switch (hash)
 			{
-<# foreach (var group in keyedRegistrations) { #>
+<#         foreach (var group in keyHashBuckets[b]) { #>
 				case 0x<#= group.Key.ToString("X16") #>UL: return <#= group.Count() == 1 ? $"{ResolverName.Name}FormatterFactory.Create{group.First()}()" : string.Join(" ?? ", group.Select(i => $"{ResolverName.Name}FormatterFactory.Create{i}(t)")) #>;
-<# } #>
+<#         } #>
 			}
 
 			return null;
 		}
-<# } #>
+<#     } }
+   } #>
 
 		/// <summary>
 		/// Hashes the namespace-qualified runtime name of a type with 64-bit FNV-1a,
@@ -182,15 +211,21 @@ partial class <#= ResolverName.Name #> : MsgPack::IFormatterResolver
 	/// type a method references when compiling it.
 	/// Methods that take the requested type are for types that share a key hash with another registered type, or that
 	/// have no key: they confirm the type with typeof() and return null for any other type.
+	/// The methods must not be inlined: a JIT or AOT compiler that inlined them into the method that picks one
+	/// would again load every formatter that method can create.
 	/// This class has no static state, so calling into it never triggers class initialization.
 	/// </summary>
 	private static class <#= ResolverName.Name #>FormatterFactory
 	{
 <# for(var i = 0; i < constructedRegistrations.Length; i++) { var x = constructedRegistrations[i]; #>
+		[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
 <#     if (checkedRegistrations.Contains(i)) { #>
 		internal static object Create<#= i #>(global::System.Type t) => t == typeof(<#= x.DataType.GetQualifiedName(genericStyle: GenericParameterStyle.Arguments) #>) ? <#= x.GetFormatterInstanceForResolver() #> : null;
 <#     } else { #>
 		internal static object Create<#= i #>() => <#= x.GetFormatterInstanceForResolver() #>;
+<#     } #>
+<#     if (i < constructedRegistrations.Length - 1) { #>
+
 <#     } #>
 <# } #>
 	}

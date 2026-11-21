@@ -1147,4 +1147,27 @@ public class MyGenericType<T>
 
         await VerifyCS.Test.RunDefaultAsync(this.testOutputHelper, testSource);
     }
+
+    /// <summary>
+    /// A resolver with more registered types than one of its lookup methods switches over spreads them over several methods.
+    /// </summary>
+    [Fact]
+    public async Task ManyRegisteredTypes()
+    {
+        string[] types = { "bool", "byte", "char", "int", "long", "short", "string", "uint" };
+        IEnumerable<string> members = types
+            .SelectMany(key => types.Select(value => $"Dictionary<{key}, {value}>"))
+            .Select((type, i) => $"    [Key({i})]\n    public {type} Value{i} {{ get; set; }}\n");
+        string testSource = $$"""
+            using System.Collections.Generic;
+            using MessagePack;
+
+            [MessagePackObject]
+            public class A
+            {
+            {{string.Join("\n", members)}}}
+            """;
+
+        await VerifyCS.Test.RunDefaultAsync(this.testOutputHelper, testSource);
+    }
 }

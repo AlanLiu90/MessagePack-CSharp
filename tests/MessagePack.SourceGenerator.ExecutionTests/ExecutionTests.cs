@@ -1,6 +1,7 @@
 // Copyright (c) All contributors. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using System.Reflection;
 using MessagePack.Formatters;
 
 public class ExecutionTests(ITestOutputHelper logger)
@@ -92,6 +93,32 @@ public class ExecutionTests(ITestOutputHelper logger)
     public void PrivateFieldIsSerialized()
     {
         this.AssertRoundtrip(new HasPrivateSerializedMembers { ValueAccessor = 3 });
+    }
+#endif
+
+#if !FORCE_MAP_MODE // only this project has enough types for the generated resolver to spread its lookup over several methods.
+    [Fact]
+    public void ManyRegisteredTypes_AreAllFound()
+    {
+        IFormatterResolver resolver = GeneratedMessagePackResolver.Instance;
+        MethodInfo getFormatter = typeof(IFormatterResolver).GetMethod(nameof(IFormatterResolver.GetFormatter))!;
+        PropertyInfo[] properties = typeof(HasManyMemberTypes).GetProperties();
+        Assert.Equal(36, properties.Length);
+        foreach (PropertyInfo property in properties)
+        {
+            object? formatter = getFormatter.MakeGenericMethod(property.PropertyType).Invoke(resolver, null);
+            Assert.NotNull(formatter);
+            Assert.Equal(typeof(DictionaryFormatter<,>).MakeGenericType(property.PropertyType.GetGenericArguments()), formatter.GetType());
+        }
+
+        Assert.NotNull(resolver.GetFormatter<HasManyMemberTypes>());
+        Assert.Null(resolver.GetFormatter<Dictionary<Guid, Guid>>());
+        Assert.Null(resolver.GetFormatter<Version>());
+
+        HasManyMemberTypes after = this.Roundtrip(new HasManyMemberTypes { Value0 = new() { [true] = false }, Value35 = new() { ["a"] = "b" } });
+        Assert.Equal(new Dictionary<bool, bool> { [true] = false }, after.Value0);
+        Assert.Null(after.Value1);
+        Assert.Equal(new Dictionary<string, string> { ["a"] = "b" }, after.Value35);
     }
 #endif
 
